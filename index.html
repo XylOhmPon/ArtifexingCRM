@@ -53,7 +53,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Artifexing CRM</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232980C9'/%3E%3Ctext x='16' y='23' font-family='Arial,sans-serif' font-size='20' font-weight='700' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232980C9'/%3E%3Ctext x='16' y='23' font-family='Arial,sans-serif' font-size='20' font-weight='700' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1188,6 +1188,9 @@ function applyTenantTheme() {
   if (TENANT_CONFIG.logoSvg) {
     logoEl.innerHTML = TENANT_CONFIG.logoSvg;
     logoEl.classList.remove('has-emoji');
+    // Favicon az eredeti logó SVG-ből (mint a weboldalon)
+    const fav = document.getElementById('favicon');
+    if (fav) fav.href = 'data:image/svg+xml,' + encodeURIComponent(TENANT_CONFIG.logoSvg);
   } else {
     logoEl.textContent = TENANT_CONFIG.logoEmoji || '⚡';
     logoEl.classList.add('has-emoji');
