@@ -125,6 +125,10 @@ mark{background:var(--accent-bg);color:var(--accent);padding:0 2px;border-radius
 .user-menu-input{width:100%;padding:8px 10px;font-size:13px;font-family:var(--font);border:1px solid var(--border);border-radius:var(--rs);background:var(--bg);color:var(--t1);outline:none;transition:border .15s}
 .user-menu-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
 .user-menu-hint{font-size:11px;color:var(--t3);margin-top:8px;line-height:1.5}
+.user-menu-nameview{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.user-menu-nameval{font-size:14px;font-weight:600;color:var(--t1)}
+.user-menu-edit-btn{font-size:12px;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .12s}
+.user-menu-edit-btn:hover{background:var(--accent-bg)}
 .user-menu-item{padding:12px 16px;font-size:13px;font-weight:500;color:var(--red);cursor:pointer;transition:background .12s}
 .user-menu-item:hover{background:var(--red-bg)}
 .notif-hd{padding:14px 16px 10px;font-size:14px;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
@@ -694,12 +698,7 @@ mark{background:var(--accent-bg);color:var(--accent);padding:0 2px;border-radius
       <div class="user-menu-email" id="user-menu-email">–</div>
       <div class="user-menu-role">Bejelentkezve</div>
     </div>
-    <div class="user-menu-body">
-      <label class="user-menu-label">Megjelenített név</label>
-      <input id="user-menu-name" class="user-menu-input" placeholder="pl. Kovács János" onkeydown="if(event.key==='Enter')saveDisplayName()">
-      <button class="btn btn-primary btn-sm" style="width:100%;margin-top:8px" onclick="saveDisplayName()">Név mentése</button>
-      <div class="user-menu-hint">Ez a név jelenik meg a belső üzeneteknél.</div>
-    </div>
+    <div class="user-menu-body" id="user-menu-body"></div>
     <div class="user-menu-item" onclick="sbSignOut()">🚪 Kijelentkezés</div>
   </div>
 </div>
@@ -5318,6 +5317,7 @@ function confirmWipe() {
 let _sb = null;
 let _sbSaveTimer = null;
 let _currentUserName = TENANT_CONFIG.ownerInitials;  // bejelentkezett felhasználó neve (üzenetekhez)
+let _savedDisplayName = '';                          // a Supabase-ben elmentett megjelenített név ('' = nincs)
 
 function _sbInit() {
   if (!TENANT_CONFIG.supabaseUrl || !TENANT_CONFIG.supabaseKey) return false;
@@ -5408,6 +5408,34 @@ async function sbSignOut() {
   location.reload();
 }
 
+function _esc(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// A névszekció renderelése: ha van mentett név és nem szerkesztünk → csak megjelenítés + Módosítás gomb.
+// Ha nincs név, vagy szerkesztünk → beviteli mező + Mentés (+ Mégse ha van mit visszaállítani).
+function renderNameSection(editing) {
+  const box = $('user-menu-body');
+  if (!box) return;
+  if (_savedDisplayName && !editing) {
+    box.innerHTML = `
+      <label class="user-menu-label">Megjelenített név</label>
+      <div class="user-menu-nameview">
+        <span class="user-menu-nameval">${_esc(_savedDisplayName)}</span>
+        <button class="user-menu-edit-btn" onclick="renderNameSection(true)">✎ Módosítás</button>
+      </div>
+      <div class="user-menu-hint">Ez a név jelenik meg a belső üzeneteknél.</div>`;
+  } else {
+    box.innerHTML = `
+      <label class="user-menu-label">Megjelenített név</label>
+      <input id="user-menu-name" class="user-menu-input" placeholder="pl. Kovács János" value="${_esc(_savedDisplayName)}" onkeydown="if(event.key==='Enter')saveDisplayName()">
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="saveDisplayName()">Mentés</button>
+        ${_savedDisplayName ? `<button class="btn btn-ghost btn-sm" onclick="renderNameSection(false)">Mégse</button>` : ''}
+      </div>
+      <div class="user-menu-hint">Ez a név jelenik meg a belső üzeneteknél.</div>`;
+    setTimeout(() => { const i = $('user-menu-name'); if (i) i.focus(); }, 30);
+  }
+}
+
 async function saveDisplayName() {
   const inp = $('user-menu-name');
   if (!inp) return;
@@ -5416,13 +5444,14 @@ async function saveDisplayName() {
   if (!_sb) { toast('Nincs bejelentkezve.'); return; }
   const { data, error } = await _sb.auth.updateUser({ data: { display_name: name } });
   if (error) { toast('⚠ Nem sikerült menteni a nevet.'); return; }
+  _savedDisplayName = name;
   _currentUserName = name;
   // Avatar kezdőbetűk frissítése
   const parts = name.split(/[.\s]+/).filter(Boolean);
   const ini = parts.map(p => p[0]?.toUpperCase() || '').join('').slice(0, 2) || 'AX';
   const av = $('tb-avatar-el');
   if (av) { av.textContent = ini; av.title = name + ' · ' + (data?.user?.email || ''); }
-  $('userMenu').classList.remove('open');
+  renderNameSection(false);
   toast('✓ Név mentve: ' + name);
 }
 
@@ -5464,8 +5493,8 @@ async function _startApp() {
     if (av) { av.textContent = ini; av.title = (displayName ? displayName + ' · ' : '') + user.email; }
     const em = $('user-menu-email');
     if (em) em.textContent = user.email;
-    const nm = $('user-menu-name');
-    if (nm) nm.value = displayName;
+    _savedDisplayName = displayName;
+    renderNameSection(false);
   }
 
   renderNotifs();
