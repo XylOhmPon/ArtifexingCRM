@@ -5322,6 +5322,8 @@ let _sb = null;
 let _sbSaveTimer = null;
 let _currentUserName = TENANT_CONFIG.ownerInitials;  // bejelentkezett felhasználó neve (üzenetekhez)
 let _savedDisplayName = '';                          // a Supabase-ben elmentett megjelenített név ('' = nincs)
+let _sbToken = '';                                   // bejelentkezett felhasználó access tokenje (unload-flush-hoz)
+let _sbDirty = false;                                // van-e még el nem küldött helyi változás
 
 function _sbInit() {
   if (!TENANT_CONFIG.supabaseUrl || !TENANT_CONFIG.supabaseKey) return false;
@@ -5333,18 +5335,44 @@ function _sbInit() {
 
 function _sbScheduleSave() {
   if (!_sb) return;
+  _sbDirty = true;
+  const el = document.getElementById('sync-badge');
+  if (el) { el.textContent = '↻ Mentés…'; el.className = 'auth-sync-badge syncing'; }
   clearTimeout(_sbSaveTimer);
   _sbSaveTimer = setTimeout(async () => {
     try {
       await _sb.from('crm_sync').upsert({ id: 1, data: DB, updated_at: new Date().toISOString() });
+      _sbDirty = false;
       // szinkron jelző frissítés
-      const el = document.getElementById('sync-badge');
-      if (el) { el.textContent = '✓ Szinkronizálva'; el.className = 'auth-sync-badge'; }
+      const e2 = document.getElementById('sync-badge');
+      if (e2) { e2.textContent = '✓ Szinkronizálva'; e2.className = 'auth-sync-badge'; }
     } catch(e) {
-      const el = document.getElementById('sync-badge');
-      if (el) { el.textContent = '⚠ Szinkron hiba'; el.className = 'auth-sync-badge syncing'; }
+      const e2 = document.getElementById('sync-badge');
+      if (e2) { e2.textContent = '⚠ Szinkron hiba'; e2.className = 'auth-sync-badge syncing'; }
     }
   }, 600);
+}
+
+// Azonnali, szinkron mentés fülbezáráskor (keepalive: a böngésző bezárás közben is befejezi).
+// Normál fetch-csel a PostgREST upsert végpontra, a felhasználó access tokenjével.
+function _sbFlushSync() {
+  if (!_sb || !_sbDirty || !_sbToken) return;
+  try {
+    clearTimeout(_sbSaveTimer);
+    const url = TENANT_CONFIG.supabaseUrl.replace(/\/+$/,'') + '/rest/v1/crm_sync?on_conflict=id';
+    fetch(url, {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        'apikey': TENANT_CONFIG.supabaseKey,
+        'Authorization': 'Bearer ' + _sbToken,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({ id: 1, data: DB, updated_at: new Date().toISOString() })
+    });
+    _sbDirty = false;
+  } catch(e) {}
 }
 
 async function _sbLoadRemote() {
@@ -5460,6 +5488,11 @@ async function saveDisplayName() {
 }
 
 async function _startApp() {
+  // Access token elmentése az unload-flush-hoz; frissítés token-megújuláskor
+  const { data: { session: _sess } } = await _sb.auth.getSession();
+  _sbToken = _sess?.access_token || '';
+  _sb.auth.onAuthStateChange((_event, s) => { _sbToken = s?.access_token || ''; });
+
   // Betöltés Supabase-ből (ha van)
   const remote = await _sbLoadRemote();
   if (remote && remote.clients) {
@@ -5524,6 +5557,13 @@ async function _startApp() {
       updateBadges();
       toast('🔄 Adatok szinkronizálva másik eszközről');
     }
+  });
+
+  // Fülbezárás / oldalváltás előtt azonnali mentés (ne vesszen el az utolsó 600 ms)
+  window.addEventListener('beforeunload', _sbFlushSync);
+  window.addEventListener('pagehide', _sbFlushSync);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') _sbFlushSync();
   });
 }
 
