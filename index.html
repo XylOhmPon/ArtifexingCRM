@@ -56,6 +56,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root {
   --bg:#f2f2f7; --surface:#fff; --surface-2:#fafafa; --border:#e5e5ea; --border-light:#f0f0f5;
@@ -601,6 +602,21 @@ mark{background:var(--accent-bg);color:var(--accent);padding:0 2px;border-radius
 .doc-upload-zone:hover,.doc-upload-zone.dragover{border-color:var(--accent);background:var(--accent-bg)}
 .doc-upload-zone input[type=file]{display:none}
 
+/* AUTH SCREEN */
+#auth-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:40px 36px;width:380px;max-width:94vw;box-shadow:var(--shl)}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.auth-logo-icon{width:44px;height:44px;color:var(--accent)}
+.auth-logo-icon svg{width:100%;height:100%}
+.auth-logo-name{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.auth-logo-tagline{font-size:12px;color:var(--t3);margin-top:1px}
+.auth-title{font-size:18px;font-weight:700;margin-bottom:20px}
+.auth-msg{font-size:13px;color:var(--red);margin-top:8px;min-height:18px}
+.auth-loading{font-size:13px;color:var(--t3);margin-top:8px}
+.auth-footer{margin-top:20px;font-size:12px;color:var(--t3);text-align:center;line-height:1.6}
+.auth-sync-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--green);background:var(--green-bg);padding:3px 8px;border-radius:6px;margin-left:8px;font-weight:600}
+.auth-sync-badge.syncing{color:var(--orange);background:var(--orange-bg)}
+
 /* PRINT */
 @media print{
   #topbar,#top-nav,#sidebar,#toast,.btn,.back-btn,.page-hd,.no-print{display:none!important}
@@ -613,6 +629,29 @@ mark{background:var(--accent-bg);color:var(--accent);padding:0 2px;border-radius
 </style>
 </head>
 <body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon" id="auth-logo-icon">⚡</div>
+      <div>
+        <div class="auth-logo-name" id="auth-logo-name">Artifexing</div>
+        <div class="auth-logo-tagline" id="auth-logo-tagline">Irányítási Rendszer</div>
+      </div>
+    </div>
+    <div class="auth-title">Bejelentkezés</div>
+    <div class="fg"><label>Email cím</label><input type="email" id="auth-email" placeholder="nev@artifexing.hu" autocomplete="email" onkeydown="if(event.key==='Enter')$('auth-pw').focus()"></div>
+    <div class="fg"><label>Jelszó</label><input type="password" id="auth-pw" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')sbSignIn()"></div>
+    <div class="auth-msg" id="auth-msg"></div>
+    <div class="auth-loading" id="auth-loading" style="display:none">⏳ Bejelentkezés folyamatban…</div>
+    <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="sbSignIn()">Bejelentkezés</button>
+    <div class="auth-footer">
+      🔒 Az adatok biztonságosan, Supabase adatbázisban tárolódnak.<br>
+      Minden bejelentkezett felhasználó ugyanazt az adatbázist látja.
+    </div>
+  </div>
+</div>
 
 <!-- TOPBAR -->
 <div id="topbar">
@@ -1077,6 +1116,10 @@ const TENANT_CONFIG = {
   green:          '#16A085',   // siker / kifizetett
   greenBg:        '#E0F5F0',   // halvány türkiz háttér
 
+  // ── Supabase backend (multi-user szinkron) ───────────────────────
+  supabaseUrl:    '',   // pl. 'https://xxxxxxxxxxxx.supabase.co'
+  supabaseKey:    '',   // Supabase project → Settings → API → anon public key
+
   // ── SVG logo – eredeti Artifexing brand fájlból (csak az ikon, szöveg nélkül) ───
   logoSvg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="415 360 285 265">
     <path transform="matrix(1,0,0,-1,553.3154,369.46913)" stroke-width="14" stroke-linecap="round" stroke-miterlimit="10" stroke-linejoin="miter" fill="none" stroke="#1d71b8" d="M0 0-126.201-101.666"/>
@@ -1181,6 +1224,7 @@ const DB_KEY = TENANT_CONFIG.dbKey;
 
 function saveDB() {
   try { localStorage.setItem(DB_KEY, JSON.stringify(DB)); } catch(e) {}
+  _sbScheduleSave();
 }
 
 function loadDB() {
@@ -5120,13 +5164,21 @@ function renderBeallitasok() {
           <div style="display:flex;justify-content:space-between"><span>Verzió</span><strong style="color:var(--t1);font-family:var(--mono)">1.3.0</strong></div>
           <div style="display:flex;justify-content:space-between"><span>Cégnév</span><strong style="color:var(--t1)">${TENANT_CONFIG.companyName}</strong></div>
           <div style="display:flex;justify-content:space-between"><span>Adatbázis kulcs</span><strong style="color:var(--t1);font-family:var(--mono);font-size:11px">${DB_KEY}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>Tárolás módja</span><strong style="color:var(--t1)">Helyi (böngésző)</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>Tárolás módja</span><strong style="color:var(--t1)">${_sb ? 'Supabase (felhő szinkron)' : 'Helyi (böngésző)'}</strong></div>
+          ${_sb ? `<div style="display:flex;justify-content:space-between"><span>Szinkron állapot</span><span id="sync-badge-settings" class="auth-sync-badge" style="font-size:11px">✓ Aktív</span></div>` : ''}
         </div>
-        <div style="margin-top:14px;padding:10px 12px;background:var(--accent-bg);border-radius:var(--rs);font-size:11px;color:var(--accent);line-height:1.6">
-          🔒 <strong>Adatvédelem:</strong> Az összes adat kizárólag ebben a böngészőben tárolódik, nem továbbítódik szervernek.
-          Ha másik gépen is használni szeretnéd, készíts biztonsági mentést, majd a másik gépen állítsd vissza.
-        </div>
+        ${_sb ? `<div style="margin-top:14px;padding:10px 12px;background:var(--green-bg);border-radius:var(--rs);font-size:11px;color:var(--green);line-height:1.6">
+          ☁️ <strong>Felhő szinkron aktív:</strong> Az adatok valós időben szinkronizálódnak minden bejelentkezett eszközön.
+        </div>` : `<div style="margin-top:14px;padding:10px 12px;background:var(--accent-bg);border-radius:var(--rs);font-size:11px;color:var(--accent);line-height:1.6">
+          🔒 <strong>Offline mód:</strong> Az adatok csak ebben a böngészőben tárolódnak. A Supabase konfigurálása után lesz felhő szinkron.
+        </div>`}
       </div>
+
+      ${_sb ? `<div class="card" style="padding:20px">
+        <div class="div-label">Fiók</div>
+        <div style="font-size:13px;color:var(--t2);margin-bottom:14px">Kijelentkezés után a bejelentkezési képernyő jelenik meg. Az adatok a szerveren megmaradnak.</div>
+        <button class="btn btn-danger btn-sm" onclick="sbSignOut()">🚪 Kijelentkezés</button>
+      </div>` : ''}
 
     </div>`;
 }
@@ -5221,17 +5273,185 @@ function confirmWipe() {
 }
 
 // ═══════════════════════════════════════════════
+// SUPABASE AUTH & SYNC
+// ═══════════════════════════════════════════════
+let _sb = null;
+let _sbSaveTimer = null;
+
+function _sbInit() {
+  if (!TENANT_CONFIG.supabaseUrl || !TENANT_CONFIG.supabaseKey) return false;
+  try {
+    _sb = window.supabase.createClient(TENANT_CONFIG.supabaseUrl, TENANT_CONFIG.supabaseKey);
+    return true;
+  } catch(e) { return false; }
+}
+
+function _sbScheduleSave() {
+  if (!_sb) return;
+  clearTimeout(_sbSaveTimer);
+  _sbSaveTimer = setTimeout(async () => {
+    try {
+      await _sb.from('crm_sync').upsert({ id: 1, data: DB, updated_at: new Date().toISOString() });
+      // szinkron jelző frissítés
+      const el = document.getElementById('sync-badge');
+      if (el) { el.textContent = '✓ Szinkronizálva'; el.className = 'auth-sync-badge'; }
+    } catch(e) {
+      const el = document.getElementById('sync-badge');
+      if (el) { el.textContent = '⚠ Szinkron hiba'; el.className = 'auth-sync-badge syncing'; }
+    }
+  }, 600);
+}
+
+async function _sbLoadRemote() {
+  if (!_sb) return null;
+  try {
+    const { data, error } = await _sb.from('crm_sync').select('data').eq('id', 1).single();
+    if (error || !data) return null;
+    return data.data;
+  } catch(e) { return null; }
+}
+
+function _mergeRemote(remote) {
+  if (!remote || !remote.clients) return;
+  DB = {
+    clients:          remote.clients          || [],
+    projects:         remote.projects         || [],
+    subs:             remote.subs             || [],
+    invoices:         remote.invoices         || [],
+    quotes:           remote.quotes           || [],
+    notifications:    remote.notifications    || [],
+    messages:         remote.messages         || {},
+    documents:        remote.documents        || [],
+    incomingInvoices: remote.incomingInvoices || [],
+    worksheets:       remote.worksheets       || [],
+    inventory:        remote.inventory        || [],
+    calEvents:        remote.calEvents        || [],
+    garantia:         remote.garantia         || [],
+    settings:         remote.settings         || JSON.parse(JSON.stringify(DEMO_DATA.settings))
+  };
+  try { localStorage.setItem(DB_KEY, JSON.stringify(DB)); } catch(e) {}
+}
+
+function _showApp() {
+  $('auth-screen').style.display = 'none';
+  $('topbar').style.display = '';
+  $('top-nav').style.display = '';
+  $('app-body').style.display = '';
+  $('mobile-bottom-nav').style.display = '';
+}
+
+function _showLogin(msg) {
+  $('auth-screen').style.display = 'flex';
+  $('topbar').style.display = 'none';
+  $('top-nav').style.display = 'none';
+  $('app-body').style.display = 'none';
+  $('mobile-bottom-nav').style.display = 'none';
+  if (msg) $('auth-msg').textContent = msg;
+  $('auth-loading').style.display = 'none';
+}
+
+async function sbSignIn() {
+  const email = $('auth-email').value.trim();
+  const pw    = $('auth-pw').value;
+  if (!email || !pw) { $('auth-msg').textContent = 'Kérlek töltsd ki mindkét mezőt.'; return; }
+  $('auth-msg').textContent = '';
+  $('auth-loading').style.display = 'block';
+  const { error } = await _sb.auth.signInWithPassword({ email, password: pw });
+  $('auth-loading').style.display = 'none';
+  if (error) { $('auth-msg').textContent = 'Hibás email vagy jelszó.'; return; }
+  await _startApp();
+}
+
+async function sbSignOut() {
+  if (_sb) await _sb.auth.signOut();
+  location.reload();
+}
+
+async function _startApp() {
+  // Betöltés Supabase-ből (ha van)
+  const remote = await _sbLoadRemote();
+  if (remote && remote.clients) {
+    _mergeRemote(remote);
+  } else {
+    // Első indítás: helyi adat feltolva
+    _sbScheduleSave();
+  }
+
+  _showApp();
+  applyTenantTheme();
+
+  // Topbar szinkron jelző
+  const tbRight = document.querySelector('.tb-right');
+  if (tbRight && _sb) {
+    const badge = document.createElement('span');
+    badge.id = 'sync-badge';
+    badge.className = 'auth-sync-badge';
+    badge.textContent = '✓ Szinkronizálva';
+    tbRight.insertBefore(badge, tbRight.firstChild);
+  }
+
+  // Logged-in user initials az avatarba
+  const { data: { user } } = await _sb.auth.getUser();
+  if (user) {
+    const parts = (user.email || '').split('@')[0].split('.');
+    const ini = parts.map(p => p[0]?.toUpperCase() || '').join('').slice(0, 2) || 'AX';
+    const av = $('tb-avatar-el');
+    if (av) { av.textContent = ini; av.title = user.email; }
+  }
+
+  renderNotifs();
+  updateBadges();
+  renderDashboard();
+
+  // Auto-szinkron: ha a tab visszakerül fókuszba
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible' || !_sb) return;
+    const r = await _sbLoadRemote();
+    if (!r || !r.clients) return;
+    const newStr = JSON.stringify(r);
+    const curStr = JSON.stringify({
+      clients:DB.clients, projects:DB.projects, subs:DB.subs,
+      invoices:DB.invoices, quotes:DB.quotes, garantia:DB.garantia,
+      worksheets:DB.worksheets, documents:DB.documents, messages:DB.messages,
+      calEvents:DB.calEvents, inventory:DB.inventory, incomingInvoices:DB.incomingInvoices
+    });
+    if (newStr !== curStr) {
+      _mergeRemote(r);
+      renderScreen(currentScreen,
+        currentProjectId || currentClientId || currentQuoteId || currentWorksheetId);
+      updateBadges();
+      toast('🔄 Adatok szinkronizálva másik eszközről');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-applyTenantTheme();
-// Beállítások mezők config-ból
-const _cfgCo = document.getElementById('cfg-company');
-const _cfgEm = document.getElementById('cfg-email');
-if (_cfgCo) _cfgCo.value = TENANT_CONFIG.companyName;
-if (_cfgEm) _cfgEm.value = TENANT_CONFIG.email;
-renderNotifs();
-updateBadges();
-renderDashboard();
+(async function appInit() {
+  if (_sbInit()) {
+    // Supabase konfigurálva — auth flow
+    const { data: { session } } = await _sb.auth.getSession();
+    if (session) {
+      await _startApp();
+    } else {
+      // Auth screen logó beállítása
+      const li = $('auth-logo-icon');
+      if (TENANT_CONFIG.logoSvg) { li.innerHTML = TENANT_CONFIG.logoSvg; li.style.color = 'var(--accent)'; }
+      else li.textContent = TENANT_CONFIG.logoEmoji || '⚡';
+      $('auth-logo-name').textContent = TENANT_CONFIG.companyName;
+      $('auth-logo-tagline').textContent = TENANT_CONFIG.tagline;
+      _showLogin();
+    }
+  } else {
+    // Supabase nincs konfigurálva — offline localStorage mód
+    _showApp();
+    applyTenantTheme();
+    renderNotifs();
+    updateBadges();
+    renderDashboard();
+  }
+})();
 </script>
 
 <!-- QUICK LOOK PREVIEW OVERLAY -->
