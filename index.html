@@ -115,6 +115,13 @@ mark{background:var(--accent-bg);color:var(--accent);padding:0 2px;border-radius
 /* NOTIF PANEL */
 .notif-panel{position:absolute;top:54px;right:16px;width:340px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--shl);z-index:99;display:none;overflow:hidden}
 .notif-panel.open{display:block;animation:fadeIn .2s ease}
+.user-menu{position:absolute;top:54px;right:16px;width:240px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--shl);z-index:99;display:none;overflow:hidden}
+.user-menu.open{display:block;animation:fadeIn .2s ease}
+.user-menu-hd{padding:14px 16px;border-bottom:1px solid var(--border-light)}
+.user-menu-email{font-size:13px;font-weight:600;color:var(--t1);word-break:break-all}
+.user-menu-role{font-size:11px;color:var(--t3);margin-top:2px}
+.user-menu-item{padding:12px 16px;font-size:13px;font-weight:500;color:var(--red);cursor:pointer;transition:background .12s}
+.user-menu-item:hover{background:var(--red-bg)}
 .notif-hd{padding:14px 16px 10px;font-size:14px;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .notif-item{display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .1s}
 .notif-item:hover{background:var(--bg)}
@@ -671,11 +678,18 @@ mark{background:var(--accent-bg);color:var(--accent);padding:0 2px;border-radius
   </div>
   <div class="tb-right">
     <div class="notif-btn" onclick="toggleNotif()">🔔<div class="notif-dot" id="notif-dot"></div></div>
-    <div class="avatar" id="tb-avatar-el">AX</div>
+    <div class="avatar" id="tb-avatar-el" onclick="toggleUserMenu(event)" style="cursor:pointer" title="Fiók">AX</div>
   </div>
   <div class="notif-panel" id="notifPanel">
     <div class="notif-hd">Értesítések <span style="font-size:11px;font-weight:500;color:var(--t3)" id="notif-count">5 olvasatlan</span></div>
     <div id="notif-list"></div>
+  </div>
+  <div class="user-menu" id="userMenu">
+    <div class="user-menu-hd">
+      <div class="user-menu-email" id="user-menu-email">–</div>
+      <div class="user-menu-role">Bejelentkezve</div>
+    </div>
+    <div class="user-menu-item" onclick="sbSignOut()">🚪 Kijelentkezés</div>
   </div>
 </div>
 
@@ -3864,12 +3878,24 @@ let notifOpen = false;
 function toggleNotif() {
   notifOpen = !notifOpen;
   $('notifPanel').classList.toggle('open', notifOpen);
+  $('userMenu').classList.remove('open');
 }
 document.addEventListener('click', e => {
   if (notifOpen && !e.target.closest('.notif-btn') && !e.target.closest('.notif-panel')) {
     notifOpen = false; $('notifPanel').classList.remove('open');
   }
+  if (!e.target.closest('#tb-avatar-el') && !e.target.closest('.user-menu')) {
+    $('userMenu').classList.remove('open');
+  }
 });
+
+function toggleUserMenu(e) {
+  if (e) e.stopPropagation();
+  const m = $('userMenu');
+  const willOpen = !m.classList.contains('open');
+  m.classList.toggle('open', willOpen);
+  $('notifPanel').classList.remove('open'); notifOpen = false;
+}
 
 // ═══════════════════════════════════════════════
 // BADGES
@@ -5174,12 +5200,6 @@ function renderBeallitasok() {
         </div>`}
       </div>
 
-      ${_sb ? `<div class="card" style="padding:20px">
-        <div class="div-label">Fiók</div>
-        <div style="font-size:13px;color:var(--t2);margin-bottom:14px">Kijelentkezés után a bejelentkezési képernyő jelenik meg. Az adatok a szerveren megmaradnak.</div>
-        <button class="btn btn-danger btn-sm" onclick="sbSignOut()">🚪 Kijelentkezés</button>
-      </div>` : ''}
-
     </div>`;
 }
 
@@ -5397,6 +5417,8 @@ async function _startApp() {
     const ini = parts.map(p => p[0]?.toUpperCase() || '').join('').slice(0, 2) || 'AX';
     const av = $('tb-avatar-el');
     if (av) { av.textContent = ini; av.title = user.email; }
+    const em = $('user-menu-email');
+    if (em) em.textContent = user.email;
   }
 
   renderNotifs();
