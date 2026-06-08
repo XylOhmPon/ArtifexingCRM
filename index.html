@@ -1287,6 +1287,14 @@ let worksheetFilter = { projectId: '', search: '' };
 const $ = id => document.getElementById(id);
 const fmt = n => n ? new Intl.NumberFormat('hu-HU').format(n) + ' Ft' : '–';
 const fmtDate = d => d ? new Date(d).toLocaleDateString('hu-HU', {month:'short', day:'numeric'}) : '–';
+// Üzenet időbélyeg: ISO dátumot "2026. jún. 8. 14:32" formára, régi 'most' jellegű stringet változatlanul
+const fmtMsgTime = t => {
+  if (!t) return '';
+  const d = new Date(t);
+  if (isNaN(d.getTime())) return t;  // nem dátum (pl. régi 'most') → ahogy van
+  return d.toLocaleString('hu-HU', {year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+};
+const msgMeta = m => `${m.from||'?'} · ${fmtMsgTime(m.time)}`;
 const initials = (fn, ln) => ((fn||'')[0]||'') + ((ln||'')[0]||'');
 const clientName = c => c ? c.ln + ' ' + c.fn : '–';
 const clientById = id => DB.clients.find(c => c.id === id);
@@ -1971,7 +1979,7 @@ function renderProjetDetail(id) {
           <div class="chat-area" id="chat-area-${id}" style="min-height:120px;max-height:180px">
             ${msgs.map(m=>`<div style="align-self:${m.sent?'flex-end':'flex-start'}">
               <div class="chat-msg ${m.sent?'chat-sent':'chat-recv'}">${m.text}</div>
-              <div class="chat-meta" style="${m.sent?'text-align:right':''}">${m.from} · ${m.time}</div>
+              <div class="chat-meta" style="${m.sent?'text-align:right':''}">${msgMeta(m)}</div>
             </div>`).join('')}
             ${!msgs.length ? '<div style="font-size:12px;color:var(--t3);text-align:center;margin:auto">Még nincs üzenet</div>' : ''}
           </div>
@@ -2242,15 +2250,15 @@ function sendMsg(pid) {
   const inp = $('chat-in-' + pid);
   if (!inp || !inp.value.trim()) return;
   if (!DB.messages[pid]) DB.messages[pid] = [];
-  const now = new Date();
-  DB.messages[pid].push({from:TENANT_CONFIG.ownerInitials, text:inp.value, time:'most', sent:true});
+  DB.messages[pid].push({from:_currentUserName, text:inp.value, time:new Date().toISOString(), sent:true});
   saveDB();
   inp.value = '';
   const area = $('chat-area-' + pid);
   if (area) {
+    const m = DB.messages[pid].at(-1);
     const div = document.createElement('div');
     div.style.alignSelf = 'flex-end';
-    div.innerHTML = `<div class="chat-msg chat-sent">${DB.messages[pid].at(-1).text}</div><div class="chat-meta" style="text-align:right">${TENANT_CONFIG.ownerInitials} · most</div>`;
+    div.innerHTML = `<div class="chat-msg chat-sent">${m.text}</div><div class="chat-meta" style="text-align:right">${msgMeta(m)}</div>`;
     area.appendChild(div);
     area.scrollTop = area.scrollHeight;
   }
@@ -3593,7 +3601,7 @@ function renderUzenetek() {
       <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px" id="msg-thread">
         ${msgs.map(m=>`<div style="align-self:${m.sent?'flex-end':'flex-start'}">
           <div class="chat-msg ${m.sent?'chat-sent':'chat-recv'}">${m.text}</div>
-          <div class="chat-meta" style="${m.sent?'text-align:right':''}">${m.from} · ${m.time}</div>
+          <div class="chat-meta" style="${m.sent?'text-align:right':''}">${msgMeta(m)}</div>
         </div>`).join('')}
         ${!msgs.length?`<div style="font-size:13px;color:var(--t3);text-align:center;margin:auto">${thread?.isGeneral?'Még nincs általános üzenet':'Nincs üzenet ebben a projektben'}</div>`:''}
       </div>
@@ -3631,14 +3639,15 @@ window.mainSendMsg = function(pid) {
   if (!inp || !inp.value.trim()) return;
   if (!DB.messages[pid]) DB.messages[pid] = [];
   const txt = inp.value;
-  DB.messages[pid].push({from:TENANT_CONFIG.ownerInitials, text:txt, time:'most', sent:true});
+  DB.messages[pid].push({from:_currentUserName, text:txt, time:new Date().toISOString(), sent:true});
   saveDB();
   inp.value = '';
   const thread = $('msg-thread');
   if (thread) {
+    const m = DB.messages[pid].at(-1);
     const div = document.createElement('div');
     div.style.alignSelf = 'flex-end';
-    div.innerHTML = `<div class="chat-msg chat-sent">${txt}</div><div class="chat-meta" style="text-align:right">${TENANT_CONFIG.ownerInitials} · most</div>`;
+    div.innerHTML = `<div class="chat-msg chat-sent">${m.text}</div><div class="chat-meta" style="text-align:right">${msgMeta(m)}</div>`;
     thread.appendChild(div);
     thread.scrollTop = thread.scrollHeight;
   }
@@ -5297,6 +5306,7 @@ function confirmWipe() {
 // ═══════════════════════════════════════════════
 let _sb = null;
 let _sbSaveTimer = null;
+let _currentUserName = TENANT_CONFIG.ownerInitials;  // bejelentkezett felhasználó neve (üzenetekhez)
 
 function _sbInit() {
   if (!TENANT_CONFIG.supabaseUrl || !TENANT_CONFIG.supabaseKey) return false;
@@ -5419,6 +5429,8 @@ async function _startApp() {
     if (av) { av.textContent = ini; av.title = user.email; }
     const em = $('user-menu-email');
     if (em) em.textContent = user.email;
+    // Üzenetek küldőneve: email előtti rész (pl. "kovacs.janos")
+    _currentUserName = (user.email || '').split('@')[0] || ini;
   }
 
   renderNotifs();
