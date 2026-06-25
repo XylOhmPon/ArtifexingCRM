@@ -1,0 +1,32 @@
+name: Supabase keep-alive
+
+# A Supabase ingyenes projekt ~1 hét tétlenség után felfüggesztődik.
+# Ez a feladat naponta meghívja a projekt REST + Auth végpontját,
+# így a projekt mindig "aktívnak" számít és sosem áll le magától.
+
+on:
+  schedule:
+    # Minden nap 06:00 UTC-kor (kétszer is, hogy egy esetleges kimaradás ne számítson)
+    - cron: '0 6 * * *'
+    - cron: '0 18 * * *'
+  workflow_dispatch:   # kézi indítás is lehetséges a GitHub felületről
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST + Auth
+        env:
+          SUPABASE_URL: https://kwljyfcbboorghjjpkqs.supabase.co
+          SUPABASE_KEY: sb_publishable_pEtxqvcN3bC48G-o5j7GGg_z6aMBunl
+        run: |
+          echo "REST ping:"
+          curl -sS -o /dev/null -w "  status: %{http_code}\n" \
+            "$SUPABASE_URL/rest/v1/crm_sync?select=id&limit=1" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY"
+          echo "Auth health ping:"
+          curl -sS -o /dev/null -w "  status: %{http_code}\n" \
+            "$SUPABASE_URL/auth/v1/health" \
+            -H "apikey: $SUPABASE_KEY"
+          echo "Keep-alive done."
