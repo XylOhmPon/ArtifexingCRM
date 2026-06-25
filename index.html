@@ -2891,10 +2891,39 @@ function renderAjanlatDetail(id) {
     </div>`;
 }
 
+function openQuoteSendEmail(q) {
+  const c = clientById(q.clientId);
+  if (!c || !c.email) { toast('Az ügyfélnél nincs email cím megadva!'); return; }
+  const tot = calcQuote(q);
+  const itemLines = q.items.map(it => `• ${it.desc} – ${it.qty} ${it.unit} × ${fmt(it.unitPrice)} = ${fmt(it.qty * it.unitPrice)}`).join('\n');
+  const body = `Tisztelt ${c.fn}!
+
+Mellékelten küldjük a(z) ${q.number} számú árajánlatunkat.
+
+${itemLines}
+
+Végösszeg (bruttó): ${fmt(tot.sumBrutto)}
+Érvényesség: ${fmtDate(q.validUntil)}
+${q.note ? '\nMegjegyzés: ' + q.note + '\n' : ''}
+Kérdés esetén állunk rendelkezésére.
+
+Üdvözlettel,
+${TENANT_CONFIG.companyName}
+${TENANT_CONFIG.phone}
+${TENANT_CONFIG.email}`;
+
+  const subject = encodeURIComponent(`Árajánlat – ${q.number}`);
+  const to = encodeURIComponent(c.email);
+  downloadQuotePDF(q.id);
+  window.open(`mailto:${to}?subject=${subject}&body=${encodeURIComponent(body)}`);
+  toast('📧 Email megnyitva – csatold a letöltött PDF-et a levélhez!');
+}
+
 function setQuoteStatus(id, status) {
   const q = quoteById(id);
   if (!q) return;
   q.status = status;
+  if (status === 'Elküldve') openQuoteSendEmail(q);
   if (status === 'Elfogadva' && q.projectId) {
     const docName = `Árajánlat_${q.number}_Elfogadva.pdf`;
     const alreadyLinked = DB.documents.some(d => d.projectId === q.projectId && d.name === docName);
@@ -3266,6 +3295,7 @@ function saveQuote(forcedStatus) {
     toast('Árajánlat frissítve!');
     closeModal('quote');
     renderAjanlatDetail(existingId);
+    if (forcedStatus === 'Elküldve') openQuoteSendEmail(q);
   } else {
     const num = DB.quotes.length + 1;
     const newQ = {id:uid(), number:'AJ-'+new Date().getFullYear()+'-'+String(num).padStart(3,'0'), createdAt:new Date().toISOString().slice(0,10), ...data};
@@ -3275,6 +3305,7 @@ function saveQuote(forcedStatus) {
     saveDB();
     updateBadges();
     nav('ajanlat-detail', newQ.id);
+    if (forcedStatus === 'Elküldve') openQuoteSendEmail(newQ);
   }
   saveDB();
   updateBadges();
