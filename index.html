@@ -3012,6 +3012,35 @@ function getLogoPng() {
   });
 }
 
+function _arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+let _geistRegularB64 = null, _geistBoldB64 = null;
+async function ensureGeistFont(doc) {
+  try {
+    if (!_geistRegularB64 || !_geistBoldB64) {
+      const [regBuf, boldBuf] = await Promise.all([
+        fetch('/fonts/Geist-Regular.ttf').then(r => r.arrayBuffer()),
+        fetch('/fonts/Geist-Bold.ttf').then(r => r.arrayBuffer())
+      ]);
+      _geistRegularB64 = _arrayBufferToBase64(regBuf);
+      _geistBoldB64 = _arrayBufferToBase64(boldBuf);
+    }
+    doc.addFileToVFS('Geist-Regular.ttf', _geistRegularB64);
+    doc.addFont('Geist-Regular.ttf', 'Geist', 'normal');
+    doc.addFileToVFS('Geist-Bold.ttf', _geistBoldB64);
+    doc.addFont('Geist-Bold.ttf', 'Geist', 'bold');
+    return true;
+  } catch (e) { return false; }
+}
+
 async function downloadQuotePDF(id) {
   const q = quoteById(id);
   if (!q) return;
@@ -3019,6 +3048,7 @@ async function downloadQuotePDF(id) {
   const logoPng = await getLogoPng();
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const hasGeist = await ensureGeistFont(doc);
   const c = clientById(q.clientId);
   const p = projectById(q.projectId);
   const tot = calcQuote(q);
@@ -3133,9 +3163,10 @@ async function downloadQuotePDF(id) {
 
   // Megjegyzés
   if (q.note) {
-    doc.setTextColor(80,80,80); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    const noteFont = hasGeist ? 'Geist' : 'helvetica';
+    doc.setTextColor(80,80,80); doc.setFontSize(8); doc.setFont(noteFont,'bold');
     doc.text('Megjegyzés az ajánlathoz:', margin, y); y += 4;
-    doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    doc.setFont(noteFont,'normal'); doc.setFontSize(8);
     const noteLines = doc.splitTextToSize(q.note, 170);
     doc.text(noteLines, margin, y); y += noteLines.length * 4 + 4;
   }
