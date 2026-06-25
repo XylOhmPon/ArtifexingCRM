@@ -2247,7 +2247,7 @@ function showStatusEmailModal(projectId, status) {
   const subject = encodeURIComponent(`${p.name} – státusz: ${status}`);
   const body = encodeURIComponent(tmpl(fn, p.name));
   const to = c?.email ? encodeURIComponent(c.email) : '';
-  $('status-email-mailto-btn').onclick = () => window.open(`mailto:${to}?subject=${subject}&body=${body}`);
+  $('status-email-mailto-btn').onclick = () => window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
   openModal('status-email');
 }
 
@@ -2915,7 +2915,7 @@ ${TENANT_CONFIG.email}`;
   const subject = encodeURIComponent(`Árajánlat – ${q.number}`);
   const to = encodeURIComponent(c.email);
   downloadQuotePDF(q.id);
-  window.open(`mailto:${to}?subject=${subject}&body=${encodeURIComponent(body)}`);
+  window.location.href = `mailto:${to}?subject=${subject}&body=${encodeURIComponent(body)}`;
   toast('📧 Email megnyitva – csatold a letöltött PDF-et a levélhez!');
 }
 
