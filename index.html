@@ -2942,13 +2942,25 @@ function setQuoteStatus(id, status) {
   toast('Státusz frissítve: ' + status);
 }
 
+function nextQuoteNumber() {
+  const year = new Date().getFullYear();
+  const prefix = 'ART-' + year + '-';
+  let maxNum = 49;
+  DB.quotes.forEach(q => {
+    if (q.number && q.number.startsWith(prefix)) {
+      const n = parseInt(q.number.slice(prefix.length), 10);
+      if (!isNaN(n) && n > maxNum) maxNum = n;
+    }
+  });
+  return prefix + String(maxNum + 1).padStart(4, '0');
+}
+
 function duplicateQuote(id) {
   const q = quoteById(id);
   if (!q) return;
   const newQ = JSON.parse(JSON.stringify(q));
   newQ.id = uid();
-  const num = DB.quotes.length + 1;
-  newQ.number = 'AJ-' + new Date().getFullYear() + '-' + String(num).padStart(3,'0');
+  newQ.number = nextQuoteNumber();
   newQ.status = 'Piszkozat';
   newQ.createdAt = new Date().toISOString().slice(0,10);
   newQ.items = newQ.items.map(it => ({...it, id: uid()}));
@@ -3297,8 +3309,7 @@ function saveQuote(forcedStatus) {
     renderAjanlatDetail(existingId);
     if (forcedStatus === 'Elküldve') openQuoteSendEmail(q);
   } else {
-    const num = DB.quotes.length + 1;
-    const newQ = {id:uid(), number:'AJ-'+new Date().getFullYear()+'-'+String(num).padStart(3,'0'), createdAt:new Date().toISOString().slice(0,10), ...data};
+    const newQ = {id:uid(), number:nextQuoteNumber(), createdAt:new Date().toISOString().slice(0,10), ...data};
     DB.quotes.push(newQ);
     toast('Árajánlat létrehozva: ' + newQ.number);
     closeModal('quote');
