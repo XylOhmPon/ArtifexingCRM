@@ -2825,7 +2825,7 @@ function renderAjanlatDetail(id) {
           <div class="qp-logo-row">
             <div class="qp-logo">Artifexing Kft.</div>
             <div class="qp-logo-mark">${TENANT_CONFIG.logoSvg || ''}</div>
-            <div class="qp-number">${q.number} · ${badge(q.status, QUOTE_STATUS_BADGE[q.status]).replace('class="badge','class="badge" style="font-size:11px')}</div>
+            <div class="qp-number">${q.number}</div>
           </div>
           <div class="qp-meta-row">
             <div class="qp-meta-block">
@@ -2885,7 +2885,7 @@ function renderAjanlatDetail(id) {
             </div>
           </div>
 
-          ${q.note ? `<div class="qp-note">📝 ${q.note}</div>` : ''}
+          ${q.note ? `<div class="qp-note"><div style="font-weight:700;color:var(--t1);margin-bottom:4px">📝 Megjegyzés az ajánlathoz</div>${q.note}</div>` : ''}
         </div>
         <div class="qp-footer">
           ${TENANT_CONFIG.companyName} · ${TENANT_CONFIG.email} · Ez az ajánlat ${fmtDate(q.validUntil)}-ig érvényes.
@@ -3043,7 +3043,6 @@ async function downloadQuotePDF(id) {
   doc.text(q.number, 210 - margin, 13, { align: 'right' });
   doc.setFontSize(9); doc.setFont('helvetica', 'normal');
   doc.text('Árajánlat', 210 - margin, 19, { align: 'right' });
-  doc.text('Státusz: ' + q.status, 210 - margin, 24, { align: 'right' });
 
   y = 40;
   doc.setTextColor(30, 30, 30);
@@ -3133,7 +3132,7 @@ async function downloadQuotePDF(id) {
   // Megjegyzés
   if (q.note) {
     doc.setTextColor(80,80,80); doc.setFontSize(8); doc.setFont('helvetica','bold');
-    doc.text('Megjegyzés:', margin, y); y += 4;
+    doc.text('Megjegyzés az ajánlathoz:', margin, y); y += 4;
     doc.setFont('helvetica','normal');
     const noteLines = doc.splitTextToSize(q.note, 170);
     doc.text(noteLines, margin, y); y += noteLines.length * 4 + 4;
