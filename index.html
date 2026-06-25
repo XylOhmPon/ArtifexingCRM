@@ -2955,6 +2955,20 @@ function nextQuoteNumber() {
   return prefix + String(maxNum + 1).padStart(4, '0');
 }
 
+function migrateQuoteNumbers() {
+  if (DB.settings?.quoteNumMigrated) return;
+  if (!DB.settings) DB.settings = JSON.parse(JSON.stringify(DEMO_DATA.settings));
+  const sorted = [...DB.quotes].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  const counters = {};
+  sorted.forEach(q => {
+    const year = (q.createdAt || String(new Date().getFullYear())).slice(0, 4);
+    counters[year] = (counters[year] || 49) + 1;
+    q.number = 'ART-' + year + '-' + String(counters[year]).padStart(4, '0');
+  });
+  DB.settings.quoteNumMigrated = true;
+  saveDB();
+}
+
 function duplicateQuote(id) {
   const q = quoteById(id);
   if (!q) return;
@@ -5543,6 +5557,7 @@ async function _startApp() {
     // Első indítás: helyi adat feltolva
     _sbScheduleSave();
   }
+  migrateQuoteNumbers();
 
   _showApp();
   applyTenantTheme();
@@ -5629,6 +5644,7 @@ async function _startApp() {
     }
   } else {
     // Supabase nincs konfigurálva — offline localStorage mód
+    migrateQuoteNumbers();
     _showApp();
     applyTenantTheme();
     renderNotifs();
